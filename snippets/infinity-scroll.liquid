@@ -1,0 +1,243 @@
+<div class="infinite-scroll-wrapper">
+  <infinite-scroll data-next="{{ next_page }}" data-page-size="{{ page_size }}" data-end-text="{{ end_text }}">
+    {% if page_size > 1 %}
+      <div class="loadingBox">
+        <span id="loading_1" class="loadingScroll"></span>
+        <span id="loading_2" class="loadingScroll"></span>
+        <span id="loading_3" class="loadingScroll"></span>
+        <span id="loading_4" class="loadingScroll"></span>
+        <span id="loading_5" class="loadingScroll"></span>
+        <span id="loading_6" class="loadingScroll"></span>
+        <span id="loading_7" class="loadingScroll"></span>
+        <span id="loading_8" class="loadingScroll"></span>
+      </div>
+    {% endif %}
+  </infinite-scroll>
+</div>
+
+<div class="scrollTopBtn">↑</div>
+
+<style>
+  .infinite-scroll-wrapper {
+    width: 100%;
+    display: block;
+    margin-top: 40px;
+    text-align: center;
+  }
+
+  .collection-wrapper .infinite-scroll-wrapper {
+    grid-column: 1 / -1;
+  }
+
+
+  .loadingBox {
+    margin: 0 auto;
+    position: relative;
+    width: 234px;
+    height: 28px;
+  }
+
+  .loadingScroll {
+    position: absolute;
+    top: 0;
+    background-color: black;
+    width: 28px;
+    height: 28px;
+    animation: loading_animation 1.5s infinite;
+    transform: scale(0.3);
+  }
+
+  #loading_1 { left: 0; animation-delay: 0.6s; }
+  #loading_2 { left: 29px; animation-delay: 0.75s; }
+  #loading_3 { left: 58px; animation-delay: 0.9s; }
+  #loading_4 { left: 88px; animation-delay: 1.05s; }
+  #loading_5 { left: 117px; animation-delay: 1.2s; }
+  #loading_6 { left: 146px; animation-delay: 1.35s; }
+  #loading_7 { left: 175px; animation-delay: 1.5s; }
+  #loading_8 { left: 205px; animation-delay: 1.64s; }
+
+  @keyframes loading_animation {
+    0% { transform: scale(1); background: black; }
+    100% { transform: scale(0.3); background: white; }
+  }
+
+
+  .scrollTopBtn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 42px;
+    height: 42px;
+    background: #000;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    z-index: 999;
+
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: all 0.3s ease;
+  }
+
+  .scrollTopBtn.show {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .scrollTopBtn:hover {
+    background: #333;
+  }
+
+
+  .pagination,
+  [class^="pagination"],
+  [class^="Pagination"] {
+    display: none !important;
+  }
+</style>
+
+<script>
+  class InfiniteScroll extends HTMLElement {
+    constructor() {
+      super();
+
+      this.page = 1;
+      this.loadedProductIds = new Set();
+
+      this.initGrid();
+      this.initObserver();
+      this.collectInitialProducts();
+      this.reorderInitial();
+    }
+
+    initGrid() {
+      const gridOptions = ['.ProductListWrapper', '#main-collection-product-grid', '#product-grid', '.product-list'];
+
+      for (let gridName of gridOptions) {
+        let grid = document.querySelector(gridName);
+        if (grid) {
+          this.gridName = gridName;
+          this.gridContainer = grid;
+          break;
+        }
+      }
+    }
+
+    initObserver() {
+      const observer = new IntersectionObserver(this.loadMore.bind(this), {
+        threshold: 0.1,
+      });
+
+      observer.observe(this);
+    }
+
+    collectInitialProducts() {
+      const items = this.gridContainer.querySelectorAll('li');
+
+      items.forEach((item) => {
+        const id = item.dataset.productId;
+        if (!id) return;
+
+        this.loadedProductIds.add(id);
+      });
+    }
+
+    reorderInitial() {
+      const items = this.gridContainer.querySelectorAll('li');
+
+      const featured = [];
+      const normal = [];
+
+      items.forEach((item) => {
+        if (item.dataset.featured === 'true') {
+          featured.push(item);
+        } else {
+          normal.push(item);
+        }
+      });
+
+      const fragment = document.createDocumentFragment();
+      [...featured, ...normal].forEach((el) => fragment.appendChild(el));
+
+      this.gridContainer.appendChild(fragment);
+    }
+
+    loadMore(entries) {
+      const [entry] = entries;
+      if (!entry.isIntersecting) return;
+
+      this.page++;
+      this.fetchNextPage(this.page);
+    }
+
+    fetchNextPage(page) {
+      if (page > parseInt(this.dataset.pageSize)) {
+        this.innerHTML = `<h2>${this.dataset.endText}</h2>`;
+        return;
+      }
+
+      const url = new URL(this.dataset.next, window.location.origin);
+      url.searchParams.set('page', page);
+
+      fetch(url.href)
+        .then((res) => res.text())
+        .then((html) => {
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          const newItems = doc.querySelectorAll(`${this.gridName} li`);
+
+          const featured = document.createDocumentFragment();
+          const normal = document.createDocumentFragment();
+
+          newItems.forEach((item) => {
+            const id = item.dataset.productId;
+            if (!id) return;
+
+            if (this.loadedProductIds.has(id)) return;
+            this.loadedProductIds.add(id);
+
+            if (item.dataset.featured === 'true') {
+              featured.appendChild(item);
+            } else {
+              normal.appendChild(item);
+            }
+          });
+
+          if (featured.childNodes.length) {
+            this.gridContainer.insertBefore(featured, this.gridContainer.firstChild);
+          }
+
+          this.gridContainer.appendChild(normal);
+        })
+        .catch((err) => console.error(err));
+    }
+  }
+
+  customElements.define('infinite-scroll', InfiniteScroll);
+
+  const scrollBtn = document.querySelector('.scrollTopBtn');
+
+  window.addEventListener('scroll', () => {
+    if (!scrollBtn) return;
+
+    if (window.scrollY > 600) {
+      scrollBtn.classList.add('show');
+    } else {
+      scrollBtn.classList.remove('show');
+    }
+  });
+
+  if (scrollBtn) {
+    scrollBtn.addEventListener('click', () => {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth',
+      });
+    });
+  }
+</script>
