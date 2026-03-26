@@ -148,6 +148,9 @@ SHOPIFY STORE/
 
 https://featured-assignment-demo.myshopify.com/collections/all-products
 
+## Password
+Rishi@123
+
 ---
 
 ## Setup Instructions
